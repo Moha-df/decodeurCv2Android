@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- Debug Switch -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mode Debug"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/debug_switch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Activer le mode debug"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Point Size Slider -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Taille des points de détection"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/point_size_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="6px"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp" />
+
+    <SeekBar
+        android:id="@+id/point_size_seekbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:min="1"
+        android:max="10"
+        android:progress="5" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1px ← → 10px"
+        android:textSize="12sp"
+        android:layout_marginTop="4dp" />
+
+</LinearLayout>

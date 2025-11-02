@@ -1,0 +1,9 @@
+// Backup of imported OpenCV SDK build script
+// This file was moved from build.gradle because it conflicted with the root project.
+// If you need to re-import OpenCV SDK as a module, import only the `sdk/java` folder
+// or place this file under the OpenCV SDK folder.
+
+/*
+Paste of original OpenCV SDK build.gradle content is preserved here for reference.
+If you need the original content later, restore it into an appropriate module directory.
+*/
