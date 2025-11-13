@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
 
     <!-- Debug Switch -->
     <TextView
@@ -43,14 +48,48 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:min="1"
-        android:max="10"
+        android:max="16"
         android:progress="5" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="1px ← → 10px"
+        android:text="1px ← → 16px"
         android:textSize="12sp"
-        android:layout_marginTop="4dp" />
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="16dp" />
 
-</LinearLayout>
+    <!-- Choix de la taille de la grille -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Taille de la grille"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <RadioGroup
+        android:id="@+id/grid_size_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <RadioButton
+            android:id="@+id/grid_8_radio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="8 x 8" />
+
+        <RadioButton
+            android:id="@+id/grid_16_radio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="16 x 16"
+            android:layout_marginStart="24dp" />
+
+    </RadioGroup>
+
+    </LinearLayout>
+
+</ScrollView>

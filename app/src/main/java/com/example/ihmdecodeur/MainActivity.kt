@@ -14,6 +14,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import android.util.Size
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -70,12 +71,22 @@ class MainActivity : AppCompatActivity(), SubtitleDecoder.Listener {
         val debugSwitch = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.debug_switch)
         val pointSizeSeekBar = dialogView.findViewById<SeekBar>(R.id.point_size_seekbar)
         val pointSizeText = dialogView.findViewById<android.widget.TextView>(R.id.point_size_value)
-        
-        // Valeurs actuelles
-        debugSwitch.isChecked = subtitleDecoder?.debugMode ?: false
-        pointSizeSeekBar.progress = (subtitleDecoder?.pointSize ?: 6) - 1
-        pointSizeText.text = "${subtitleDecoder?.pointSize ?: 6}px"
-        
+        val gridSizeGroup = dialogView.findViewById<android.widget.RadioGroup>(R.id.grid_size_group)
+        val grid8Radio = dialogView.findViewById<android.widget.RadioButton>(R.id.grid_8_radio)
+        val grid16Radio = dialogView.findViewById<android.widget.RadioButton>(R.id.grid_16_radio)
+
+    // Valeurs actuelles
+    debugSwitch.isChecked = subtitleDecoder?.debugMode ?: false
+    // Ensure seekbar max and visibility so the slider is visible on all devices
+    pointSizeSeekBar.max = 16
+    pointSizeSeekBar.visibility = View.VISIBLE
+    pointSizeSeekBar.progress = (subtitleDecoder?.pointSize ?: 6) - 1
+    pointSizeText.text = "${subtitleDecoder?.pointSize ?: 6}px"
+
+    // Grid size current (fallback to default 8)
+    val currentGridW = subtitleDecoder?.gridWidth ?: 8
+        if (currentGridW == 8) grid8Radio.isChecked = true else grid16Radio.isChecked = true
+
         pointSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 pointSizeText.text = "${progress + 1}px"
@@ -83,13 +94,22 @@ class MainActivity : AppCompatActivity(), SubtitleDecoder.Listener {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-        
+
         AlertDialog.Builder(this)
             .setTitle("⚙️ Paramètres")
             .setView(dialogView)
             .setPositiveButton("OK") { _, _ ->
                 subtitleDecoder?.debugMode = debugSwitch.isChecked
                 subtitleDecoder?.pointSize = pointSizeSeekBar.progress + 1
+                // Appliquer la taille de la grille choisie
+                val selectedGridIs8 = gridSizeGroup.checkedRadioButtonId == R.id.grid_8_radio
+                if (selectedGridIs8) {
+                    subtitleDecoder?.gridWidth = 8
+                    subtitleDecoder?.gridHeight = 8
+                } else {
+                    subtitleDecoder?.gridWidth = 16
+                    subtitleDecoder?.gridHeight = 16
+                }
                 updateStatusDisplay()
                 Toast.makeText(this, "Paramètres mis à jour", Toast.LENGTH_SHORT).show()
             }
@@ -100,7 +120,9 @@ class MainActivity : AppCompatActivity(), SubtitleDecoder.Listener {
     private fun updateStatusDisplay() {
         val debugStatus = if (subtitleDecoder?.debugMode == true) "ON" else "OFF"
         val pointSize = subtitleDecoder?.pointSize ?: 6
-        binding.statusText.text = "🔄 Redressement: ON | 🐛 Debug: $debugStatus | 🔴 Points: ${pointSize}px"
+    val gridW = subtitleDecoder?.gridWidth ?: 8
+    val gridH = subtitleDecoder?.gridHeight ?: 8
+        binding.statusText.text = "Redressement: ON | Grid: ${gridW}x${gridH} | Debug: $debugStatus | Points: ${pointSize}px"
         
         // Cacher l'overlay debug si le mode debug est désactivé
         if (subtitleDecoder?.debugMode == false) {
@@ -121,7 +143,11 @@ class MainActivity : AppCompatActivity(), SubtitleDecoder.Listener {
                 }
 
             val imageAnalyzer = ImageAnalysis.Builder()
-                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                // Fixe une résolution cible stable pour rendre la détection déterministe
+                .setTargetResolution(Size(1280, 720))
+                // Utiliser le format YUV_420_888 pour une conversion fiable
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 .build()
                 .also {
                     subtitleDecoder = SubtitleDecoder(this)
@@ -201,8 +227,8 @@ class SubtitleDecoder(private val listener: Listener) : ImageAnalysis.Analyzer {
         fun onDebugFrameAvailable(bitmap: android.graphics.Bitmap)
     }
 
-    private val gridWidth = 16
-    private val gridHeight = 16
+    var gridWidth = 8
+    var gridHeight = 8
     var pointSize = 6
     var debugMode = false
 
@@ -214,8 +240,14 @@ class SubtitleDecoder(private val listener: Listener) : ImageAnalysis.Analyzer {
         Point(0.52, 0.52)     // Bas droite
     )
     
-    // Offsets pour chaque grille
+    // Offsets pour chaque grille (peuvent rester petits; ce sont des rotations circulaires de l'index)
     private val gridOffsets = listOf(0, 5, 10, 15)
+
+    init {
+        // Log pour confirmer la configuration lors du démarrage du décodeur
+        val charsPerGrid = (gridWidth * gridHeight) / 8
+        Log.d("SubtitleDecoder", "Configuration decoder: ${gridWidth}x${gridHeight} (${gridWidth*gridHeight} bits → $charsPerGrid chars), offsets=$gridOffsets, maxPointSize=16")
+    }
 
     private val detectionBuffer = ArrayDeque<String>(10)
     private var currentSubtitle = ""
@@ -557,15 +589,37 @@ class SubtitleDecoder(private val listener: Listener) : ImageAnalysis.Analyzer {
             val gridRect = Rect(gridXOffset, gridYOffset, gridPixelWidth, gridPixelHeight)
             val gridBlurred = Mat(blurred, gridRect)
 
-            // Paramètres adaptatifs selon la taille des points
-            val (minRadius, maxRadius, minDist, param1, param2) = when (pointSize) {
-                1 -> listOf(1, 3, 1.0, 10.0, 2.0)
-                2 -> listOf(1, 4, 1.0, 15.0, 3.0)
-                3 -> listOf(1, 6, 2.0, 20.0, 5.0)
-                6 -> listOf(4, 8, 6.0, 37.0, 11.0)
-                7 -> listOf(6, 8, 6.0, 45.0, 13.0)
-                else -> listOf(max(1, pointSize - 2), pointSize + 3, max(5.0, (pointSize - 1).toDouble()), 37.0, 11.0)
+            // Échelle par rapport à une résolution de référence pour rendre les paramètres indépendants
+            val scaleFactor = max(0.5, frame.cols().toDouble() / 1280.0)
+
+            // Paramètres adaptatifs selon la taille des points (valeurs de base par taille de point)
+            // Cas explicites pour les tailles 1..16 pour garantir des valeurs raisonnables
+            val (baseMinR, baseMaxR, baseMinDist, baseP1, baseP2) = when (pointSize.coerceIn(1, 16)) {
+                1 -> listOf(1.0, 3.0, 1.0, 10.0, 2.0)
+                2 -> listOf(1.0, 4.0, 1.0, 15.0, 3.0)
+                3 -> listOf(1.0, 6.0, 2.0, 20.0, 5.0)
+                4 -> listOf(2.0, 7.0, 3.0, 25.0, 6.0)
+                5 -> listOf(3.0, 8.0, 4.0, 30.0, 8.0)
+                6 -> listOf(4.0, 10.0, 5.0, 37.0, 11.0)
+                7 -> listOf(6.0, 12.0, 6.0, 45.0, 13.0)
+                8 -> listOf(7.0, 14.0, 7.0, 50.0, 15.0)
+                9 -> listOf(8.0, 16.0, 8.0, 55.0, 17.0)
+                10 -> listOf(9.0, 18.0, 9.0, 60.0, 19.0)
+                11 -> listOf(10.0, 20.0, 10.0, 65.0, 21.0)
+                12 -> listOf(11.0, 22.0, 11.0, 70.0, 23.0)
+                13 -> listOf(12.0, 24.0, 12.0, 75.0, 25.0)
+                14 -> listOf(13.0, 26.0, 13.0, 80.0, 27.0)
+                15 -> listOf(14.0, 28.0, 14.0, 85.0, 29.0)
+                16 -> listOf(15.0, 30.0, 15.0, 90.0, 31.0)
+                else -> listOf(max(1.0, (pointSize - 2).toDouble()), (pointSize + 3).toDouble(), max(5.0, (pointSize - 1).toDouble()), 37.0, 11.0)
             }
+
+            // Appliquer l'échelle liée à la résolution
+            val minRadius = max(1, (baseMinR * scaleFactor).roundToInt())
+            val maxRadius = max(minRadius + 1, (baseMaxR * scaleFactor).roundToInt())
+            val minDist = max(1.0, baseMinDist * scaleFactor)
+            val param1 = baseP1
+            val param2 = baseP2
 
             // Détection de cercles
             val circles = Mat()
@@ -606,8 +660,9 @@ class SubtitleDecoder(private val listener: Listener) : ImageAnalysis.Analyzer {
                 val y = circle[1].toInt()
                 val r = circle[2].toInt()
 
-                // Filtrage des faux positifs
-                if (r < pointSize * 0.63 || r > pointSize * 1.9) continue
+                // Filtrage des faux positifs (selon l'échelle de la frame)
+                val expectedRadius = max(1, (pointSize * scaleFactor).roundToInt())
+                if (r < expectedRadius * 0.63 || r > expectedRadius * 1.9) continue
                 
                 // Vérifier le contraste dans la région
                 val y1 = max(0, y - r - 2)
@@ -666,12 +721,23 @@ class SubtitleDecoder(private val listener: Listener) : ImageAnalysis.Analyzer {
                     Point((gridXOffset + gridPixelWidth).toDouble(), (gridYOffset + gridPixelHeight).toDouble()),
                     gridColor, 2)
                     
-                val params = when (pointSize) {
+                val params = when (pointSize.coerceIn(1,16)) {
                     1 -> "1-3/1/10-2"
                     2 -> "1-4/1/15-3"
                     3 -> "1-6/2/20-5"
-                    6 -> "4-8/6/37-11"
-                    7 -> "6-8/6/45-13"
+                    4 -> "2-7/3/25-6"
+                    5 -> "3-8/4/30-8"
+                    6 -> "4-10/5/37-11"
+                    7 -> "6-12/6/45-13"
+                    8 -> "7-14/7/50-15"
+                    9 -> "8-16/8/55-17"
+                    10 -> "9-18/9/60-19"
+                    11 -> "10-20/10/65-21"
+                    12 -> "11-22/11/70-23"
+                    13 -> "12-24/12/75-25"
+                    14 -> "13-26/13/80-27"
+                    15 -> "14-28/14/85-29"
+                    16 -> "15-30/15/90-31"
                     else -> "${max(1, pointSize - 2)}-${pointSize + 3}/${max(5, pointSize - 1)}/37-11"
                 }
                 Imgproc.putText(workingFrame, "Grid $gridId ($params)", 
@@ -777,6 +843,18 @@ class SubtitleDecoder(private val listener: Listener) : ImageAnalysis.Analyzer {
         val mat = Mat()
         Imgproc.cvtColor(yuv, mat, Imgproc.COLOR_YUV2BGR_NV21, 3)
         yuv.release()
+        // Gérer la rotation fournie par CameraX (pour s'assurer que l'image est en paysage)
+        val rotation = image.imageInfo.rotationDegrees
+        if (rotation != 0) {
+            when (rotation) {
+                90 -> Core.rotate(mat, mat, Core.ROTATE_90_CLOCKWISE)
+                180 -> Core.rotate(mat, mat, Core.ROTATE_180)
+                270 -> Core.rotate(mat, mat, Core.ROTATE_90_COUNTERCLOCKWISE)
+            }
+            Log.d("SubtitleDecoder", "Image converted: ${mat.cols()}x${mat.rows()} rotated by $rotation°")
+        } else {
+            Log.d("SubtitleDecoder", "Image converted: ${mat.cols()}x${mat.rows()} rotation 0°")
+        }
         return mat
     }
     

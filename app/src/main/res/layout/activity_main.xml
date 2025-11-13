@@ -39,7 +39,7 @@
         android:padding="8dp"
         android:textColor="@android:color/white"
         android:textSize="14sp"
-        android:text="🔄 Redressement: ON | 🐛 Debug: OFF | 🔴 Points: 6px"
+        android:text="Redressement: ON | Debug: OFF | Points: 6px"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
